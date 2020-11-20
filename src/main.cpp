@@ -1,25 +1,60 @@
 #include <Arduino.h>
+#include <SPI.h>
 #include "util.h"
 
 //#define DEBUG_I2C
 #include "ssd1306_64x32.h"
 
 enum {
- SSD1306_SCL = PORTD5,
- SSD1306_SDA = PORTD4,
+ SSD1306_SCL = PORTD2,
+ SPI_SS = PORTB2,
  SSD1306_ADDRESS = 0x78,
  USEC_DELAY_DATA = 25,
- USEC_DELAY_CLK = 10
+ USEC_DELAY_CLK = 10,
+ USEC_DELAY_SPI = 5
 };
 
+#define SPI_SS PORTB2
+
+static uint16_t display_index = 0xffff;
+
 static const sw_i2c i2c{
-    SSD1306_SCL,
-    SSD1306_SDA,
     USEC_DELAY_DATA,
     USEC_DELAY_CLK,
-    [](uint8_t port){ PORTD |= (1 << port);}, //set port hight
-    [](uint8_t port){ PORTD &= ~(1 << port);}, //set port low
-    [](uint8_t port){ DDRD |= (1 << port);}   //set port as output
+
+    [](){ PORTD |= (1 << SSD1306_SCL);},
+    [](){ PORTD &= ~(1 << SSD1306_SCL);},
+    [](){ 
+      PORTB &= ~(1 << SPI_SS);
+      delayMicroseconds(USEC_DELAY_SPI);
+      SPI.transfer(display_index>>8);
+      delayMicroseconds(USEC_DELAY_SPI);
+      PORTB |= (1 << SPI_SS);
+      delayMicroseconds(USEC_DELAY_SPI);
+      PORTB &= ~(1 << SPI_SS);
+      delayMicroseconds(USEC_DELAY_SPI);
+      SPI.transfer(display_index);
+      delayMicroseconds(USEC_DELAY_SPI);
+      PORTB |= (1 << SPI_SS);
+    },
+    [](){ 
+      PORTB &= ~(1 << SPI_SS);
+      delayMicroseconds(USEC_DELAY_SPI);
+      SPI.transfer(0x00);
+      delayMicroseconds(USEC_DELAY_SPI);
+      PORTB |= (1 << SPI_SS);
+      delayMicroseconds(USEC_DELAY_SPI);
+      PORTB &= ~(1 << SPI_SS);
+      delayMicroseconds(USEC_DELAY_SPI);
+      SPI.transfer(0x00);
+      delayMicroseconds(USEC_DELAY_SPI);
+      PORTB |= (1 << SPI_SS);
+    },
+    [](){ DDRD |= (1 << SSD1306_SCL);},
+    [](){
+      DDRB |= (1 << SPI_SS);
+      SPI.begin();
+    }
 };
 
 static const ssd1306_64x32 display{
@@ -55,20 +90,37 @@ const uint8_t heartImage[8] =
   )
 };
 */
+
+#include <SPI.h>
+
+// set pin 10 as the slave select for the digital pot:
+
+const int slaveSelectPin = 10;
+
 void setup() {
   Serial.begin(115200);
 
+
+  Serial.println("SPI Initialized.");
+
   ssd1306_64x32_init(display);
-  Serial.println("Display Initialized.");
+  Serial.println("Displays Initialized.");
 
-  ssd1306_64x32_fillscreen(display, 0x01);
+  ssd1306_64x32_fillscreen(display, 0x00);
 
-  ssd1306_64x32_print(display, 0, 0,"This");
-  ssd1306_64x32_print(display, 0, 1,"is a");
-  ssd1306_64x32_print(display, 0, 2,"test");
-  ssd1306_64x32_print(display, 0, 3,"KEY [3]");
+  for(uint8_t idx=0;idx<10;idx++) {
+    display_index = 1 << idx;
+    //ssd1306_64x32_print(display, 0, 0, "This");
+    //ssd1306_64x32_print(display, 0, 1, "is a");
+    //ssd1306_64x32_print(display, 0, 2, "test");
+    //char buffer[] = {'K','E','Y', ' ', '[', '0', ']', 0};
+    //buffer[5] += idx;
+    char buffer[] = {'0' + idx, 0};
+    ssd1306_64x32_print(display, 30, 1, buffer);
+    //ssd1306_64x32_send_stream_to_page(display, 50,2, heartImage, sizeof(heartImage));   
+  }
 
-  ssd1306_64x32_send_stream_to_page(display, 50,2, heartImage, sizeof(heartImage));   
+  
 
   Serial.println("Done.");
  
