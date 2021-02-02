@@ -57,7 +57,7 @@ void ssd1306_64x32_send_cmd(const struct ssd1306_64x32 & disp, uint8_t cmd, uint
 
 void ssd1306_64x32_init(const struct ssd1306_64x32 & disp) {
     #ifdef DEBUG_I2C
-        Serial.println("*** Init SSD1206 Display ***");
+        Serial.println("*** Init SSD1206 64x32 Display ***");
         char buffer[32];
         sprintf (buffer, "Address: 0x%02x\n", disp.address);
         Serial.print(buffer);
