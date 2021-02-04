@@ -55,6 +55,24 @@ void ssd1306_128x64_send_cmd(const struct ssd1306_128x64 & disp, uint8_t cmd, ui
     #endif
 }
 
+void ssd1306_128x64_send_cmd(const struct ssd1306_128x64 & disp, uint8_t cmd, uint8_t value1, uint8_t value2, uint8_t value3) {
+    #ifdef DEBUG_I2C
+        Serial.print("Cmd3 ");
+    #endif
+    i2c_start(disp.i2c);
+    i2c_send(disp.i2c, disp.address);
+    i2c_send(disp.i2c, 0x00);  // write command
+    i2c_send(disp.i2c, cmd);
+    i2c_send(disp.i2c, value1);
+    i2c_send(disp.i2c, value2);
+    i2c_send(disp.i2c, value3);
+    i2c_stop(disp.i2c);
+    #ifdef DEBUG_I2C
+        Serial.print('\n');
+    #endif
+}
+
+
 void ssd1306_128x64_init(const struct ssd1306_128x64 & disp) {
     #ifdef DEBUG_I2C
         Serial.println("*** Init SSD1206 128x64 Display ***");
@@ -113,7 +131,7 @@ void ssd1306_128x64_send_data_stop(const struct ssd1306_128x64 & disp) {
 
 void ssd1306_128x64_set_pos(const struct ssd1306_128x64 & disp, uint8_t x, uint8_t page)
 {
-  if (page > 7 || x>127) return;
+  //if (page > 7 || x>127) return;
 
   ssd1306_128x64_send_cmd(disp, 0xb0 + page, ((x & 0xf0) >> 4) | 0x10, (x & 0x0f) | 0x01);
 }
@@ -156,6 +174,18 @@ void ssd1306_128x64_send_char(const struct ssd1306_128x64 & disp, uint8_t index)
     for (uint8_t byteIndex = 0; byteIndex<8; ++byteIndex) {    
       i2c_send(disp.i2c, pgm_read_byte(&font[index-32][byteIndex]));   
     }
+}
+
+void ssd1306_128x64_scroll_right(const struct ssd1306_128x64 & disp, uint8_t start, uint8_t stop, uint8_t speed) {
+    ssd1306_128x64_send_cmd(disp, 0x26, 0x00);
+    ssd1306_128x64_send_cmd(disp, start);
+    ssd1306_128x64_send_cmd(disp, speed);
+    ssd1306_128x64_send_cmd(disp, stop);
+    ssd1306_128x64_send_cmd(disp, 0x00, 0xff, 0x2f);  
+}
+
+void ssd1306_128x64_stop_scroll(const struct ssd1306_128x64 & disp) {
+    ssd1306_128x64_send_cmd(disp, 0x2e);
 }
 
 void ssd1306_128x64_print(const struct ssd1306_128x64 & disp, uint8_t x, uint8_t page, const char text[]) {
