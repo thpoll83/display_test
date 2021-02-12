@@ -112,7 +112,7 @@ void prepare_race() {
     ssd1306_128x64_print(display, 0, 0, "~~___    Car #");
     ssd1306_128x64_print(display, 0, 1, ".-'--`-._");
     ssd1306_128x64_print(display, 0, 2, "'-O----O--");
-    // ssd1306_128x64_print(display, 0, 3, "[========]");
+
     ssd1306_128x64_print(display, 0, 4, "Pos: ");
     ssd1306_128x64_print(display, 0, 5, "Time: ");
     ssd1306_128x64_print(display, 0, 6, "Best: ");
@@ -167,6 +167,69 @@ void setup() {
 
   start_communication();
   Serial.println("Communication started.");
+
+}
+
+void handle_buttons() {
+  
+  auto buttons = analogRead(34);
+  if(buttons<32){
+    prepare_race();
+    return;
+  }
+
+  auto car_buttons = analogRead(35);
+  if(car_buttons<4000){
+
+      if(car_buttons<32) {
+        cu_reset_best_time(&control_unit, 0);
+      } else if(car_buttons<256) {
+        cu_reset_best_time(&control_unit, 1);
+      } else if(car_buttons<512) {
+        cu_reset_best_time(&control_unit, 2);
+      } else if(car_buttons<1024) {
+        cu_reset_best_time(&control_unit, 3);
+      } else if(car_buttons<2048) {
+        cu_reset_best_time(&control_unit, 4);
+      } else {
+        cu_reset_best_time(&control_unit, 5);
+      }   
+  }
+}
+
+void update_displays() {
+  auto currentTimeMillis = millis();
+  char buffer[16];
+
+  for (uint8_t idx = 0; idx < MAX_CARS; idx++) {
+    display_index = 1 << idx;
+    auto &car = control_unit.cars[idx];
+
+    if (car.dirty | cu_car::CACHE_FLAG_NUMBER) {
+      ssd1306_128x64_print(display, 14 * 8, 0, car.str_cache_number);
+    }
+    if (car.dirty | cu_car::CACHE_FLAG_FUEL) {
+      ssd1306_128x64_print(display, 0, 3, car.str_cache_fuel);
+    }
+    if (car.dirty | cu_car::CACHE_FLAG_POSITION) {
+      ssd1306_128x64_print(display, 6 * 8, 4, car.str_cache_position);
+    }
+
+    // we always have to update the time as soon as the car is racing
+    if (car.last_timestamp != 0) {
+      float time_passed = (currentTimeMillis - car.last_timestamp) / 1000.0f;
+      snprintf(buffer, sizeof(buffer), "%1.3f ", time_passed);
+      ssd1306_128x64_print(display, 6 * 8, 5, buffer);
+    }
+
+    if (car.dirty | cu_car::CACHE_FLAG_BEST_TIME) {
+      ssd1306_128x64_print(display, 6 * 8, 6, car.str_cache_best_time);
+    }
+    if (car.dirty | cu_car::CACHE_FLAG_LAP_COUNT) {
+      ssd1306_128x64_print(display, 6 * 8, 7, car.str_cache_lap_count);
+    }
+    car.dirty = 0;
+  }
 }
 
 uint8_t no_reply_counter = 0;
@@ -176,7 +239,6 @@ void loop() {
   handleOTA();
 #endif
 
-  
   char buffer[CU_RQ_LAP_TRACK_STATE_REPLY_SIZE];
 
   auto byte_count = Serial2.available();
@@ -195,33 +257,6 @@ void loop() {
   }
   no_reply_counter++;
 
-  auto currentTimeMillis = millis();
-  for (uint8_t idx = 0; idx < MAX_CARS; idx++) {
-    display_index = 1 << idx;
-    auto &car = control_unit.cars[idx];
-
-    if (car.dirty | cu_car::CACHE_FLAG_NUMBER) {
-      ssd1306_128x64_print(display, 14 * 8, 0, car.str_cache_number);
-    }
-    if (car.dirty | cu_car::CACHE_FLAG_FUEL) {
-      ssd1306_128x64_print(display, 0, 3, car.str_cache_fuel);
-    }
-    if (car.dirty | cu_car::CACHE_FLAG_POSITION) {
-      ssd1306_128x64_print(display, 6 * 8, 4, car.str_cache_position);
-    }
-
-    // we always have to update the time
-    float time_passed =
-        (currentTimeMillis - car.last_timestamp) / 1000.0f;
-    snprintf(buffer, sizeof(buffer), "%1.3f ", time_passed);
-    ssd1306_128x64_print(display, 6 * 8, 5, buffer);
-
-    if (car.dirty | cu_car::CACHE_FLAG_BEST_TIME) {
-      ssd1306_128x64_print(display, 6 * 8, 6, car.str_cache_best_time);
-    }
-    if (car.dirty | cu_car::CACHE_FLAG_LAP_COUNT) {
-      ssd1306_128x64_print(display, 6 * 8, 7, car.str_cache_lap_count);
-    }
-    car.dirty = 0;
-  }
+  update_displays();
+  handle_buttons();
 }

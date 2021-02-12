@@ -15,6 +15,7 @@ constexpr uint8_t CU_RQ_VERSION_SIZE = sizeof(CU_RQ_VERSION);
 constexpr uint8_t CU_RQ_VERSION_REPLY_SIZE = 8;
 
 #define FULL_TRACK_UPDATE_MSEC 4000
+#define FULL_POSITION_UPDATE_MSEC 2000
 
 struct cu_track {
   enum STATE {
@@ -40,7 +41,8 @@ struct cu_track {
   };
   uint8_t flags;
 
-  uint32_t last_full_update;
+  uint32_t last_full_track_update;
+  uint32_t last_position_update;
 };
 
 struct cu_car {
@@ -89,7 +91,7 @@ struct cu {
 
 void cu_init(struct cu *control_unit) {
 
-  memset(control_unit, 0, sizeof(configUSE_RECURSIVE_MUTEXES));
+  memset(control_unit, 0, sizeof(cu));
 
   for (uint8_t idx = 0; idx < MAX_CARS; idx++) {
     auto& car = control_unit->cars[idx];
@@ -254,10 +256,16 @@ uint8_t cu_process_lap_or_track_reply(struct cu *control_unit, char *buffer, int
 #endif
       }
     }
-    car.last_timestamp = millis();
+    const auto timestamp = millis();
+    car.last_timestamp = timestamp;
     car.last_timestamp_counter = timestampCuCounter;
 
-    cu_evaluate_positions(control_unit);
+
+    if(timestamp - control_unit->track.last_full_track_update > FULL_POSITION_UPDATE_MSEC ) {
+      cu_evaluate_positions(control_unit);
+      control_unit->track.last_position_update = timestamp;
+    }
+
     return cu::REPLY_LAP_STATUS;
   }
 
@@ -287,8 +295,8 @@ uint8_t cu_process_lap_or_track_reply(struct cu *control_unit, char *buffer, int
   }
 
   const auto timestamp = millis();
-  if(timestamp - tr.last_full_update > FULL_TRACK_UPDATE_MSEC ) {
-    tr.last_full_update = timestamp;
+  if(timestamp - tr.last_full_track_update > FULL_TRACK_UPDATE_MSEC ) {
+    tr.last_full_track_update = timestamp;
 
     for (uint8_t i = 0; i < 6; ++i) {
       cu_set_fuel_bar(control_unit, i, buffer[i + 2]);
@@ -297,4 +305,10 @@ uint8_t cu_process_lap_or_track_reply(struct cu *control_unit, char *buffer, int
     tr.flags = CU_GET_NIBBLE(buffer[11]);
   }
   return cu::REPLY_TRACK_STATUS;
+}
+
+void cu_reset_best_time(struct cu* control_unit, uint8_t idx) {
+  control_unit->cars[idx].best_time = UINT32_MAX;
+  memcpy(control_unit->cars[idx].str_cache_best_time, "          ", 11);
+  control_unit->cars[idx].dirty |= cu_car::CACHE_FLAG_BEST_TIME;
 }
